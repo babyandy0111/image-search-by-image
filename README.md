@@ -1,8 +1,8 @@
 # image-search
 
 # 用圖搜尋圖片
-- `docker-compose -f docker-compose-2.3.1 up -d`
-- `pip3 install towhee fastapi uvicorn nest_asyncio`
+- `docker-compose -f docker-compose up -d`
+- `pip3 install -r requirements.txt`
 - 確認config.py裡的參數
 - `python3 api.py`
 - http://0.0.0.0:8000/docs
