@@ -1,0 +1,7 @@
+diskcache==5.6.3
+fastapi==0.104.0
+nest_asyncio==1.5.8
+opencv_python==4.8.1.78
+pymilvus==2.3.1
+towhee==1.1.2
+uvicorn==0.23.2
