@@ -55,24 +55,35 @@ def get_unique_list(data):
     return unique
 
 
-p2 = (
+p1 = (
     pipe.input('url')
         .map('url', 'original', ops.image_decode())
+        .map('original', 'original_embedding', ops.image_embedding.timm(model_name=MODEL, device=DEVICE))
+)
+
+p2 = (
+    p1.map('url', 'original', ops.image_decode())
         .map('original', ('box', 'class', 'score'), ops.object_detection.yolov5())
         .map(('original', 'box'), 'object', ops.towhee.image_crop(clamp=True))
-        .map('original', 'original_embedding', ops.image_embedding.timm(model_name=MODEL))
-        .map('object', 'object_embedding', ops.image_embedding.timm(model_name=MODEL))
+        .map('object', 'object_embedding', ops.image_embedding.timm(model_name=MODEL, device=DEVICE))
         .output('url', 'original', 'box', 'object', 'class', 'object_embedding', 'original_embedding', 'score')
 )
 
+p_insert = (
+    p1.map(('url', 'original_embedding'), 'mr', ops.ann_insert.milvus_client(
+        uri=MILVUS_URI,
+        token=MILVUS_TOKEN,
+        collection_name=DEFAULT_TABLE
+    )).output('mr')
+)
+
 p_search = (
-    pipe.input('img_embedding')
-        .map('img_embedding', ('search_res'),
-             ops.ann_search.milvus_client(uri=MILVUS_URI, anns_field='embedding',
-                                          token=MILVUS_TOKEN, limit=TOP_K,
-                                          collection_name=DEFAULT_TABLE))
-        .map('search_res', 'pred', my_func)
-        .output('pred')
+    pipe.input('img_embedding').map('img_embedding', ('search_res'), ops.ann_search.milvus_client(
+        uri=MILVUS_URI,
+        anns_field='embedding',
+        token=MILVUS_TOKEN,
+        limit=TOP_K,
+        collection_name=DEFAULT_TABLE)).map('search_res', 'pred', my_func).output('pred')
 )
 
 app = FastAPI()
@@ -216,6 +227,20 @@ async def search_images(image: UploadFile = None):
         jsonObj['object_embedding'] = objectEmbedding
         jsonObj['original_embedding'] = originalEmbedding
         return jsonObj
+    except Exception as e:
+        print(e)
+        return {'status': False, 'msg': e}, 400
+
+
+@app.get('/insert')
+async def insert_images(image: str = ''):
+    try:
+        if image == '':
+            return {'status': False, 'msg': "image is None"}, 400
+
+        t = p_insert(image)
+        print(t)
+        return {'status': True, 'msg': 'ok'}, 200
     except Exception as e:
         print(e)
         return {'status': False, 'msg': e}, 400
