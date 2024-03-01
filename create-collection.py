@@ -7,9 +7,7 @@ MILVUS_URI = os.getenv("MILVUS_URI", "https://in03-83c1cf052139d61.api.gcp-us-we
 MILVUS_TOKEN = os.getenv("MILVUS_TOKEN", "123")
 DEFAULT_VIDEO_TABLE = os.getenv("DEFAULT_VIDEO_TABLE", "x3d_m")
 DEFAULT_IMAGE_TABLE = os.getenv("DEFAULT_IMAGE_TABLE", "reverse_image_search")
-
 INDEX_TYPE = 'IVF_FLAT'
-
 VIDEO_MODEL = os.getenv("VIDEO_MODEL", "x3d_m")
 METRIC_TYPE = os.getenv("METRIC_TYPE", "L2")
 DIM = os.getenv("DIM", "2048")
@@ -20,8 +18,9 @@ def create_milvus_video_collection(collection_name, dim):
         utility.drop_collection(collection_name)
 
     fields = [
-        FieldSchema(name='path', dtype=DataType.VARCHAR, descrition='path to mp4', max_length=500, is_primary=True,
+        FieldSchema(name='seq', dtype=DataType.VARCHAR, descrition='seq', max_length=30, is_primary=True,
                     auto_id=False),
+        FieldSchema(name='path', dtype=DataType.VARCHAR, descrition='path to mp4', max_length=500),
         FieldSchema(name='embedding', dtype=DataType.FLOAT_VECTOR, descrition='video embedding vectors', dim=dim)
     ]
     schema = CollectionSchema(fields=fields, description='reverse video search')
@@ -42,8 +41,9 @@ def create_milvus_image_collection(collection_name, dim):
         utility.drop_collection(collection_name)
 
     fields = [
-        FieldSchema(name='path', dtype=DataType.VARCHAR, description='path to image', max_length=500, is_primary=True,
+        FieldSchema(name='seq', dtype=DataType.VARCHAR, descrition='seq', max_length=30, is_primary=True,
                     auto_id=False),
+        FieldSchema(name='path', dtype=DataType.VARCHAR, description='path to image', max_length=500),
         FieldSchema(name='embedding', dtype=DataType.FLOAT_VECTOR, description='image embedding vectors', dim=dim)
     ]
     schema = CollectionSchema(fields=fields, description='reverse image search')
@@ -58,8 +58,7 @@ def create_milvus_image_collection(collection_name, dim):
     return collection
 
 
-connections.connect(uri=MILVUS_URI,
-                    token=MILVUS_TOKEN)
+connections.connect(uri=MILVUS_URI, token=MILVUS_TOKEN)
 
 create_milvus_video_collection(DEFAULT_VIDEO_TABLE, DIM)
-create_milvus_video_collection(DEFAULT_IMAGE_TABLE, DIM)
+create_milvus_image_collection(DEFAULT_IMAGE_TABLE, DIM)

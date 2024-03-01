@@ -16,7 +16,6 @@ INDEX_FILE_SIZE = int(os.getenv("INDEX_FILE_SIZE", "1024"))
 DEFAULT_VIDEO_TABLE = os.getenv("DEFAULT_VIDEO_TABLE", "x3d_m")
 DEFAULT_IMAGE_TABLE = os.getenv("DEFAULT_IMAGE_TABLE", "reverse_image_search")
 
-
 TOP_K = int(os.getenv("TOP_K", "10"))
 UPLOAD_PATH = os.getenv("UPLOAD_PATH", "images/search")
 LOGS_NUM = int(os.getenv("logs_num", "0"))
@@ -25,6 +24,7 @@ LOGS_NUM = int(os.getenv("logs_num", "0"))
 IMAGE_MODEL = os.getenv("MODEL", "resnet50")
 VIDEO_MODEL = os.getenv("VIDEO_MODEL", "x3d_m")
 DEVICE = None  # if None, use default device (cuda is enabled if available)
+
 
 def my_func(path_list):
     return [str(y[0]) for y in path_list]
@@ -50,22 +50,28 @@ def get_unique_list(data):
     return unique
 
 
-p1 = (
+p0 = (
     pipe.input('url')
-        .map('url', 'original', ops.image_decode())
-        .map('original', 'original_embedding', ops.image_embedding.timm(model_name=IMAGE_MODEL, device=DEVICE))
+    .map('url', 'original', ops.image_decode())
+    .map('original', 'original_embedding', ops.image_embedding.timm(model_name=IMAGE_MODEL, device=DEVICE))
+)
+
+p1 = (
+    pipe.input('url', 'seq')
+    .map('url', 'original', ops.image_decode())
+    .map('original', 'original_embedding', ops.image_embedding.timm(model_name=IMAGE_MODEL, device=DEVICE))
 )
 
 p2 = (
-    p1.map('url', 'original', ops.image_decode())
-        .map('original', ('box', 'class', 'score'), ops.object_detection.yolov5())
-        .map(('original', 'box'), 'object', ops.towhee.image_crop(clamp=True))
-        .map('object', 'object_embedding', ops.image_embedding.timm(model_name=IMAGE_MODEL, device=DEVICE))
-        .output('url', 'original', 'box', 'object', 'class', 'object_embedding', 'original_embedding', 'score')
+    p0.map('url', 'original', ops.image_decode())
+    .map('original', ('box', 'class', 'score'), ops.object_detection.yolov5())
+    .map(('original', 'box'), 'object', ops.towhee.image_crop(clamp=True))
+    .map('object', 'object_embedding', ops.image_embedding.timm(model_name=IMAGE_MODEL, device=DEVICE))
+    .output('url', 'original', 'box', 'object', 'class', 'object_embedding', 'original_embedding', 'score')
 )
 
 p_insert = (
-    p1.map(('url', 'original_embedding'), 'mr', ops.ann_insert.milvus_client(
+    p1.map(('seq', 'url', 'original_embedding'), 'mr', ops.ann_insert.milvus_client(
         uri=MILVUS_URI,
         token=MILVUS_TOKEN,
         collection_name=DEFAULT_IMAGE_TABLE
@@ -82,15 +88,15 @@ p_search = (
 )
 
 insert_video_pipe = (
-    pipe.input('video_file')
+    pipe.input('video_file', 'seq')
     .map('video_file', 'frames',
-              ops.video_decode.ffmpeg(sample_type='uniform_temporal_subsample', args={'num_samples': 16}))
+         ops.video_decode.ffmpeg(sample_type='uniform_temporal_subsample', args={'num_samples': 16}))
     .map('frames', ('labels', 'scores', 'features'),
          ops.action_classification.pytorchvideo(model_name=VIDEO_MODEL, skip_preprocess=True))
-    .map(('video_file', 'features'), 'insert_res',
+    .map(('seq', 'video_file', 'features'), 'insert_res',
          ops.ann_insert.milvus_client(uri=MILVUS_URI,
                                       token=MILVUS_TOKEN,
-                                      collection_name=DEFAULT_IMAGE_TABLE))
+                                      collection_name=DEFAULT_VIDEO_TABLE))
     .output()
 )
 
@@ -190,6 +196,7 @@ async def search_videos(video: str = ''):
         jsonObj = {}
         jsonObj['candidates'] = []
         for data in DataCollection(res):
+            print(data)
             jsonObj['video'] = data['video_file']
             for r in data['candidates']:
                 jsonObj['candidates'].append(r[0])
@@ -201,13 +208,15 @@ async def search_videos(video: str = ''):
 
 
 @app.get('/insert-image')
-async def insert_images(image: str = ''):
+async def insert_images(image: str = '', seq: str = ''):
     try:
         if image == '':
             return {'status': False, 'msg': "image is None"}, 400
+        if seq == '':
+            return {'status': False, 'msg': "seq is None"}, 400
 
-        t = p_insert(image)
-        print(t)
+        p_insert(image, seq)
+
         return {'status': True, 'msg': 'ok'}, 200
     except Exception as e:
         print(e)
@@ -215,13 +224,15 @@ async def insert_images(image: str = ''):
 
 
 @app.get('/insert-video')
-async def insert_videos(video: str = ''):
+async def insert_videos(video: str = '', seq: str = ''):
     try:
         if video == '':
             return {'status': False, 'msg': "video is None"}, 400
+        if seq == '':
+            return {'status': False, 'msg': "seq is None"}, 400
 
-        t = insert_video_pipe(video)
-        print(t)
+        insert_video_pipe(video, seq)
+
         return {'status': True, 'msg': 'ok'}, 200
     except Exception as e:
         print(e)
