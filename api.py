@@ -7,8 +7,7 @@ from fastapi import FastAPI
 from dotenv import load_dotenv
 
 load_dotenv()
-MILVUS_PORT = int(os.getenv("MILVUS_PORT", "19530"))
-MILVUS_URI = os.getenv("MILVUS_URI", "https://in03-83c1cf052139d61.api.gcp-us-west1.zillizcloud.com")
+MILVUS_URI = os.getenv("MILVUS_URI", "https://xxxxxxx")
 MILVUS_TOKEN = os.getenv("MILVUS_TOKEN", "123")
 VECTOR_DIMENSION = int(os.getenv("VECTOR_DIMENSION", "2048"))
 INDEX_FILE_SIZE = int(os.getenv("INDEX_FILE_SIZE", "1024"))
@@ -111,6 +110,22 @@ query_video_pipe = (
                                       token=MILVUS_TOKEN,
                                       collection_name=DEFAULT_VIDEO_TABLE, limit=10))
     .output('video_file', 'candidates')
+)
+
+get_video_pipe = (
+    pipe.input('video_file')
+    .map('video_file', 'frames',
+         ops.video_decode.ffmpeg(sample_type='uniform_temporal_subsample', args={'num_samples': 16}))
+    .map('frames', ('labels', 'scores', 'features'),
+         ops.action_classification.pytorchvideo(model_name=VIDEO_MODEL, skip_preprocess=True))
+    .output('video_file', 'features')
+)
+
+get_image_pipe = (
+    pipe.input('url')
+    .map('url', 'original', ops.image_decode())
+    .map('original', 'original_embedding', ops.image_embedding.timm(model_name=IMAGE_MODEL, device=DEVICE))
+    .output('original_embedding')
 )
 
 app = FastAPI()
@@ -236,4 +251,41 @@ async def insert_videos(video: str = '', seq: str = ''):
         return {'status': True, 'msg': 'ok'}, 200
     except Exception as e:
         print(e)
+        return {'status': False, 'msg': e}, 400
+
+
+@app.get('/get-video-vec')
+async def get_video_vec(video: str = ''):
+    try:
+        if video == '':
+            return {'status': False, 'msg': "video is None"}, 400
+
+        res = get_video_pipe(video)
+
+        jsonObj = {}
+        jsonObj['features'] = []
+        for data in DataCollection(res):
+            jsonObj['features'] = data['features']
+
+        return jsonObj['features'].tolist()
+    except Exception as e:
+        print(e)
+        return {'status': False, 'msg': e}, 400
+
+
+@app.get('/get-image-vec')
+async def get_image_vec(image: str = ''):
+    try:
+        if image == '':
+            return {'status': False, 'msg': "image is None"}, 400
+
+        res = get_image_pipe(image)
+
+        jsonObj = {}
+        jsonObj['features'] = []
+        for data in DataCollection(res):
+            jsonObj['features'] = data['original_embedding']
+
+        return jsonObj['features'].tolist()
+    except Exception as e:
         return {'status': False, 'msg': e}, 400

@@ -5,7 +5,7 @@ from towhee import pipe, ops
 from towhee.datacollection import DataCollection
 
 load_dotenv()
-MILVUS_URI = os.getenv("MILVUS_URI", "https://in03-83c1cf052139d61.api.gcp-us-west1.zillizcloud.com")
+MILVUS_URI = os.getenv("MILVUS_URI", "https://xxxxxx")
 MILVUS_TOKEN = os.getenv("MILVUS_TOKEN", "123")
 DEFAULT_TABLE = os.getenv("DEFAULT_TABLE", "x3d_m")
 VIDEO_MODEL = os.getenv("MODEL", "x3d_m")

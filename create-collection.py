@@ -3,7 +3,7 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()
-MILVUS_URI = os.getenv("MILVUS_URI", "https://in03-83c1cf052139d61.api.gcp-us-west1.zillizcloud.com")
+MILVUS_URI = os.getenv("MILVUS_URI", "https://xxxxxxxx")
 MILVUS_TOKEN = os.getenv("MILVUS_TOKEN", "123")
 DEFAULT_VIDEO_TABLE = os.getenv("DEFAULT_VIDEO_TABLE", "x3d_m")
 DEFAULT_IMAGE_TABLE = os.getenv("DEFAULT_IMAGE_TABLE", "reverse_image_search")
